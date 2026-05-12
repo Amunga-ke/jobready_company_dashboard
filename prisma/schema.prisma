@@ -1,0 +1,288 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── Dashboard-Specific Models (NEW) ───
+
+model EmployerProfile {
+  id         String   @id @default(cuid()) @db.VarChar(64)
+  userId     String   @unique @db.VarChar(64)
+  companyId  String   @db.VarChar(64)
+  role       String   @default("ADMIN") @db.VarChar(30)
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model TeamMember {
+  id        String   @id @default(cuid()) @db.VarChar(64)
+  companyId String   @db.VarChar(64)
+  userId    String   @db.VarChar(64)
+  role      String   @default("MEMBER") @db.VarChar(20)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId])
+}
+
+model EmployerSettings {
+  id          String   @id @default(cuid()) @db.VarChar(64)
+  userId      String   @unique @db.VarChar(64)
+  preferences String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Company ───
+
+model Company {
+  id          String    @id @default(cuid()) @db.VarChar(64)
+  slug        String    @unique @db.VarChar(191)
+  name        String    @db.VarChar(191)
+  logo        String?   @db.VarChar(500)
+  verified    Boolean   @default(false)
+  orgType     String    @default("PRIVATE") @db.VarChar(30)
+  industry    String?   @db.VarChar(100)
+  description String?   @db.Text
+  website     String?   @db.VarChar(500)
+  location    String?   @db.VarChar(191)
+  county      String?   @db.VarChar(100)
+  country     String    @default("Kenya") @db.VarChar(100)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  listings         Listing[]
+  employerProfiles EmployerProfile[]
+  teamMembers      TeamMember[]
+}
+
+// ─── User ───
+
+model User {
+  id            String    @id @default(cuid()) @db.VarChar(64)
+  email         String    @unique @db.VarChar(191)
+  passwordHash  String    @db.VarChar(255)
+  name          String    @default("") @db.VarChar(191)
+  phone         String?   @db.VarChar(20)
+  county        String?   @db.VarChar(100)
+  bio           String?   @db.Text
+  cvUrl         String?   @db.VarChar(500)
+  avatarUrl     String?   @db.VarChar(500)
+  role          String    @default("SEEKER") @db.VarChar(20)
+  emailVerified Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  applications     Application[]
+  savedJobs        SavedJob[]
+  jobAlerts        JobAlert[]
+  employerProfile  EmployerProfile?
+  employerSettings EmployerSettings?
+  teamMemberships  TeamMember[]
+}
+
+// ─── Category ───
+
+model Category {
+  id        String        @id @default(cuid()) @db.VarChar(64)
+  slug      String        @unique @db.VarChar(191)
+  name      String        @db.VarChar(191)
+  icon      String?       @db.VarChar(50)
+  sortOrder Int           @default(0)
+  active    Boolean       @default(true)
+
+  subcategories Subcategory[]
+  listings      Listing[]
+}
+
+// ─── Subcategory ───
+
+model Subcategory {
+  id         String   @id @default(cuid()) @db.VarChar(64)
+  slug       String   @unique @db.VarChar(191)
+  name       String   @db.VarChar(191)
+  categoryId String   @db.VarChar(64)
+  sortOrder  Int      @default(0)
+  active     Boolean  @default(true)
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  listings Listing[]
+}
+
+// ─── County ───
+
+model County {
+  id     String  @id @default(cuid()) @db.VarChar(64)
+  slug   String  @unique @db.VarChar(191)
+  name   String  @db.VarChar(100)
+  code   String? @db.VarChar(10)
+  active Boolean @default(true)
+}
+
+// ─── Tag ───
+
+model Tag {
+  id   String @id @default(cuid()) @db.VarChar(64)
+  name String @unique @db.VarChar(100)
+
+  listings ListingTag[]
+}
+
+// ─── Listing ───
+
+model Listing {
+  id              String       @id @default(cuid()) @db.VarChar(64)
+  slug            String       @unique @db.VarChar(191)
+  title           String       @db.VarChar(300)
+  description     String       @default("") @db.Text
+  listingType     String       @default("JOB") @db.VarChar(20)
+  governmentLevel String?      @db.VarChar(30)
+  opportunityType String?      @db.VarChar(30)
+  companyId       String       @db.VarChar(64)
+  company         Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  categoryId      String?      @db.VarChar(64)
+  category        Category?    @relation(fields: [categoryId], references: [id])
+  subcategoryId   String?      @db.VarChar(64)
+  subcategory     Subcategory? @relation(fields: [subcategoryId], references: [id])
+  town            String       @default("") @db.VarChar(191)
+  county          String       @default("") @db.VarChar(100)
+  employmentType  String       @default("Full-time") @db.VarChar(20)
+  experienceLevel String       @default("Mid-level") @db.VarChar(20)
+  workMode        String       @default("ONSITE") @db.VarChar(20)
+  salaryMin       Int?
+  salaryMax       Int?
+  salaryPeriod    String?      @db.VarChar(10)
+  predictedSalary String?      @db.VarChar(100)
+  status          String       @default("ACTIVE") @db.VarChar(20)
+  featured        Boolean      @default(false)
+  applicationUrl  String?      @db.VarChar(500)
+  applyEmail      String?      @db.VarChar(191)
+  applyCount      Int          @default(0)
+  source          String?      @db.VarChar(191)
+  viewCount       Int          @default(0)
+  deadline        DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  tags         ListingTag[]
+  savedJobs    SavedJob[]
+  applications Application[]
+}
+
+// ─── ListingTag ───
+
+model ListingTag {
+  listingId String @db.VarChar(64)
+  tagId     String @db.VarChar(64)
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([listingId, tagId])
+}
+
+// ─── Application ───
+
+model Application {
+  id          String   @id @default(cuid()) @db.VarChar(64)
+  userId      String   @db.VarChar(64)
+  listingId   String   @db.VarChar(64)
+  status      String   @default("DRAFT") @db.VarChar(20)
+  coverLetter String?  @db.Text
+  cvUrl       String?  @db.VarChar(500)
+  notes       String?  @db.Text
+  score       Int?
+  appliedAt   DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId])
+}
+
+// ─── SavedJob ───
+
+model SavedJob {
+  id        String   @id @default(cuid()) @db.VarChar(64)
+  userId    String   @db.VarChar(64)
+  listingId String   @db.VarChar(64)
+  note      String?  @db.Text
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId])
+}
+
+// ─── JobAlert ───
+
+model JobAlert {
+  id            String    @id @default(cuid()) @db.VarChar(64)
+  userId        String    @db.VarChar(64)
+  name          String    @db.VarChar(191)
+  query         String    @db.Text
+  frequency     String    @default("DAILY") @db.VarChar(20)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  lastTriggered DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── JobUpdate (kept to match main website) ───
+
+model JobUpdate {
+  id          String   @id @default(cuid()) @db.VarChar(64)
+  slug        String   @unique @db.VarChar(191)
+  title       String   @db.VarChar(500)
+  body        String?  @db.Text
+  source      String   @db.VarChar(191)
+  updateType  String   @default("ANNOUNCEMENT") @db.VarChar(30)
+  pdfUrl      String?  @db.VarChar(500)
+  imageUrl    String?  @db.VarChar(500)
+  listingSlug String?  @db.VarChar(191)
+  postedBy    String   @default("admin") @db.VarChar(191)
+  status      String   @default("PUBLISHED") @db.VarChar(20)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── Article (kept to match main website) ───
+
+model Article {
+  id          String   @id @default(cuid()) @db.VarChar(64)
+  slug        String   @unique @db.VarChar(191)
+  title       String   @db.VarChar(500)
+  excerpt     String   @db.Text
+  body        String   @db.LongText
+  coverImage  String?  @db.VarChar(500)
+  category    String   @default("Career Tips") @db.VarChar(100)
+  tags        String?  @db.VarChar(500)
+  author      String   @default("JobReady Team") @db.VarChar(191)
+  authorImage String?  @db.VarChar(500)
+  status      String   @default("PUBLISHED") @db.VarChar(20)
+  featured    Boolean  @default(false)
+  readTime    Int      @default(5)
+  viewCount   Int      @default(0)
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
