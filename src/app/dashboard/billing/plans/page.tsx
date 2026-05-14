@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import MpesaPaymentDialog from "@/components/mpesa-payment-dialog";
 
 interface PlanData {
   id: string;
@@ -70,35 +71,75 @@ export default function PlansPage() {
   const [billingCycle, setBillingCycle] = useState<"MONTHLY" | "YEARLY">("MONTHLY");
   const [subscribing, setSubscribing] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const [plansRes, subRes] = await Promise.all([
-          fetch("/api/employer/subscription/plans"),
-          fetch("/api/employer/subscription"),
-        ]);
+  // Payment dialog state
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<PlanData | null>(null);
+  const [paymentEndpoint, setPaymentEndpoint] = useState("");
+  const [paymentBody, setPaymentBody] = useState<Record<string, unknown>>({});
 
-        if (plansRes.ok) {
-          const data = await plansRes.json();
-          setPlans(data.plans || []);
-        }
-        if (subRes.ok) {
-          const data = await subRes.json();
-          setCurrentSub(data.subscription);
-        }
-      } catch {
-        toast.error("Failed to load plans");
-      } finally {
-        setLoading(false);
+  const fetchData = useCallback(async () => {
+    try {
+      const [plansRes, subRes] = await Promise.all([
+        fetch("/api/employer/subscription/plans"),
+        fetch("/api/employer/subscription"),
+      ]);
+
+      if (plansRes.ok) {
+        const data = await plansRes.json();
+        setPlans(data.plans || []);
       }
+      if (subRes.ok) {
+        const data = await subRes.json();
+        setCurrentSub(data.subscription);
+      }
+    } catch {
+      toast.error("Failed to load plans");
+    } finally {
+      setLoading(false);
     }
-    fetchData();
   }, []);
 
-  const handleSubscribe = async (planId: string) => {
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handlePlanClick = (plan: PlanData) => {
+    const price = billingCycle === "MONTHLY" ? plan.priceMonthly : plan.priceYearly;
+
+    // Free plan: subscribe immediately
+    if (price === 0) {
+      handleFreeSubscribe(plan.id);
+      return;
+    }
+
+    // Paid plan: open M-Pesa dialog
+    const hasActiveSub = currentSub && ["ACTIVE", "TRIAL"].includes(currentSub.status);
+
+    setSelectedPlan(plan);
+
+    if (hasActiveSub) {
+      // Use change endpoint
+      setPaymentEndpoint("/api/employer/subscription/change");
+      setPaymentBody({ planId: plan.id, billingCycle });
+    } else {
+      // Use subscribe endpoint
+      setPaymentEndpoint("/api/employer/subscription");
+      setPaymentBody({ planId: plan.id, billingCycle });
+    }
+
+    setPaymentDialogOpen(true);
+  };
+
+  const handleFreeSubscribe = async (planId: string) => {
     setSubscribing(planId);
     try {
-      const res = await fetch("/api/employer/subscription", {
+      const hasActiveSub = currentSub && ["ACTIVE", "TRIAL"].includes(currentSub.status);
+
+      const endpoint = hasActiveSub
+        ? "/api/employer/subscription/change"
+        : "/api/employer/subscription";
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ planId, billingCycle }),
@@ -108,17 +149,30 @@ export default function PlansPage() {
         throw new Error(err?.error || "Failed to subscribe");
       }
       const data = await res.json();
-      setCurrentSub(data.subscription);
-      toast.success(
-        data.subscription.status === "ACTIVE"
-          ? "Successfully subscribed!"
-          : "Subscription created! Complete payment to activate."
-      );
+      // Refresh subscription data
+      const subRes = await fetch("/api/employer/subscription");
+      if (subRes.ok) {
+        const subData = await subRes.json();
+        setCurrentSub(subData.subscription);
+      }
+      toast.success(data.message || "Successfully subscribed!");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to subscribe");
     } finally {
       setSubscribing(null);
     }
+  };
+
+  const handlePaymentSuccess = () => {
+    // Refresh subscription data
+    fetch("/api/employer/subscription")
+      .then((res) => {
+        if (res.ok) return res.json();
+      })
+      .then((data) => {
+        if (data) setCurrentSub(data.subscription);
+      })
+      .catch(() => {});
   };
 
   const currentPlanSlug = currentSub?.plan?.slug;
@@ -304,7 +358,7 @@ export default function PlansPage() {
                           ? "bg-violet-600 hover:bg-violet-700 text-white"
                           : "bg-gray-900 hover:bg-gray-800 text-white"
                       }`}
-                      onClick={() => handleSubscribe(plan.id)}
+                      onClick={() => handlePlanClick(plan)}
                       disabled={subscribing === plan.id}
                     >
                       {subscribing === plan.id ? (
@@ -402,6 +456,28 @@ export default function PlansPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* M-Pesa Payment Dialog */}
+      <MpesaPaymentDialog
+        open={paymentDialogOpen}
+        onOpenChange={setPaymentDialogOpen}
+        itemType="SUBSCRIPTION"
+        itemName={
+          selectedPlan
+            ? `${selectedPlan.name} Plan - ${billingCycle === "MONTHLY" ? "Monthly" : "Yearly"}`
+            : ""
+        }
+        amount={
+          selectedPlan
+            ? billingCycle === "MONTHLY"
+              ? selectedPlan.priceMonthly
+              : selectedPlan.priceYearly
+            : 0
+        }
+        apiEndpoint={paymentEndpoint}
+        body={paymentBody}
+        onSuccess={handlePaymentSuccess}
+      />
     </div>
   );
 }

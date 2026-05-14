@@ -137,10 +137,10 @@ export default function BillingPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [subRes, creditsRes, statsRes] = await Promise.all([
+        const [subRes, creditsRes, usageRes] = await Promise.all([
           fetch("/api/employer/subscription"),
           fetch("/api/employer/credits"),
-          fetch("/api/employer/stats"),
+          fetch("/api/employer/usage"),
         ]);
 
         if (subRes.ok) {
@@ -151,12 +151,12 @@ export default function BillingPage() {
           const creditsData = await creditsRes.json();
           setCredits(creditsData);
         }
-        if (statsRes.ok) {
-          const statsData = await statsRes.json();
+        if (usageRes.ok) {
+          const usageData = await usageRes.json();
           setUsage({
-            activeListings: statsData.activeListings || 0,
-            featuredListings: 0, // not in stats endpoint
-            teamMembers: 0, // not in stats endpoint
+            activeListings: usageData.activeListings || 0,
+            featuredListings: usageData.featuredListings || 0,
+            teamMembers: usageData.teamMembers || 0,
           });
         }
       } catch {
@@ -452,11 +452,11 @@ export default function BillingPage() {
                     <span className="font-medium text-gray-700">Featured Listings / Month</span>
                   </div>
                   <span className="text-sm text-gray-500">
-                    0 / {getDisplayLimit(maxFeatured)}
+                    {usage?.featuredListings ?? 0} / {getDisplayLimit(maxFeatured)}
                   </span>
                 </div>
                 {!isUnlimitedFeatured && maxFeatured > 0 && (
-                  <Progress value={0} className="h-2" />
+                  <Progress value={Math.min(((usage?.featuredListings ?? 0) / maxFeatured) * 100, 100)} className="h-2" />
                 )}
                 {maxFeatured === 0 && (
                   <p className="text-xs text-gray-400">
@@ -473,12 +473,12 @@ export default function BillingPage() {
                     <span className="font-medium text-gray-700">Team Members</span>
                   </div>
                   <span className="text-sm text-gray-500">
-                    1 / {getDisplayLimit(maxTeam)}
+                    {usage?.teamMembers ?? 0} / {getDisplayLimit(maxTeam)}
                   </span>
                 </div>
                 {!isUnlimitedTeam && (
                   <Progress
-                    value={Math.min((1 / maxTeam) * 100, 100)}
+                    value={Math.min(((usage?.teamMembers ?? 0) / maxTeam) * 100, 100)}
                     className="h-2"
                   />
                 )}
@@ -522,7 +522,7 @@ export default function BillingPage() {
             </CardContent>
           </Card>
         </Link>
-        <Link href="/dashboard/billing/plans">
+        <Link href="/dashboard/billing/history">
           <Card className="hover:border-blue-300 transition-colors cursor-pointer h-full">
             <CardContent className="p-4 flex items-center gap-3">
               <div className="rounded-xl p-3 bg-blue-100">

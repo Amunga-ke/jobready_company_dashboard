@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import crypto from "crypto";
+import { deductCredit, ensureCreditBalance } from "@/lib/credits";
 
 export async function GET(request: Request) {
   try {
@@ -101,6 +102,52 @@ export async function POST(request: Request) {
         { error: "Title, description, and categoryId are required" },
         { status: 400 }
       );
+    }
+
+    const effectiveStatus = status || "DRAFT";
+
+    // Draft listings bypass subscription/credit limits
+    if (effectiveStatus === "ACTIVE") {
+      // Fetch active subscription with plan limits
+      const activeSubscription = await prisma.companySubscription.findFirst({
+        where: {
+          companyId: profile.companyId,
+          status: { in: ["ACTIVE", "TRIAL", "CANCELLED"] },
+        },
+        include: { plan: true },
+        orderBy: { createdAt: "desc" },
+      });
+
+      const maxListings = activeSubscription?.plan?.maxListings ?? 3;
+
+      // Count active listings (exclude DRAFT, EXPIRED, CLOSED)
+      const activeListingsCount = await prisma.listing.count({
+        where: {
+          companyId: profile.companyId,
+          status: { notIn: ["DRAFT", "EXPIRED", "CLOSED"] },
+        },
+      });
+
+      // Check if listing limit is enforced
+      if (maxListings !== -1 && activeListingsCount >= maxListings) {
+        // Check if company has credits to cover the overage
+        const hasCredits = await ensureCreditBalance(profile.companyId, 1);
+        if (hasCredits) {
+          await deductCredit(
+            profile.companyId,
+            1,
+            `Used 1 credit for listing: ${title}`,
+          );
+        } else {
+          return NextResponse.json(
+            {
+              error:
+                "You have reached your plan's listing limit. Please upgrade your subscription plan or purchase job credits to post more listings.",
+            },
+            { status: 403 }
+          );
+        }
+      }
     }
 
     const randomHex = crypto.randomBytes(3).toString("hex");

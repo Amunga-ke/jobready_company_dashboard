@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import {
@@ -27,16 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import MpesaPaymentDialog from "@/components/mpesa-payment-dialog";
 
 interface Transaction {
   id: string;
@@ -121,11 +112,10 @@ function getTypeConfig(type: string) {
 export default function CreditsPage() {
   const [credits, setCredits] = useState<CreditsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<number | null>(null);
-  const [purchasing, setPurchasing] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
 
-  const fetchCredits = async () => {
+  const fetchCredits = useCallback(async () => {
     try {
       const res = await fetch("/api/employer/credits");
       if (!res.ok) throw new Error("Failed");
@@ -136,40 +126,19 @@ export default function CreditsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchCredits();
-  }, []);
+  }, [fetchCredits]);
 
-  const handlePurchase = async (packageId: number) => {
+  const handlePurchase = (packageId: number) => {
     setSelectedPackage(packageId);
-    setPurchaseOpen(true);
+    setPaymentDialogOpen(true);
   };
 
-  const confirmPurchase = async () => {
-    if (selectedPackage === null) return;
-    setPurchasing(true);
-    try {
-      const res = await fetch("/api/employer/credits/purchase", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packageId: selectedPackage }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        throw new Error(err?.error || "Failed to purchase");
-      }
-      const data = await res.json();
-      toast.success(data.message || "Credits purchased successfully!");
-      setPurchaseOpen(false);
-      setSelectedPackage(null);
-      fetchCredits();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to purchase credits");
-    } finally {
-      setPurchasing(false);
-    }
+  const handlePaymentSuccess = () => {
+    fetchCredits();
   };
 
   const pkg = selectedPackage !== null ? CREDIT_PACKAGES[selectedPackage] : null;
@@ -388,40 +357,17 @@ export default function CreditsPage() {
         </CardContent>
       </Card>
 
-      {/* Purchase Confirmation Dialog */}
-      <AlertDialog open={purchaseOpen} onOpenChange={setPurchaseOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Purchase Credits</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pkg && (
-                <span>
-                  You are about to purchase <strong>{pkg.credits} job credits</strong> for{" "}
-                  <strong>{formatKES(pkg.price)}</strong>. Credits will be added to your
-                  account immediately after payment.
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={purchasing}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmPurchase}
-              disabled={purchasing}
-              className="bg-violet-600 hover:bg-violet-700"
-            >
-              {purchasing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                `Confirm ${formatKES(pkg?.price ?? 0)}`
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* M-Pesa Payment Dialog */}
+      <MpesaPaymentDialog
+        open={paymentDialogOpen}
+        onOpenChange={setPaymentDialogOpen}
+        itemType="CREDITS"
+        itemName={pkg ? `${pkg.credits} Job Credits` : ""}
+        amount={pkg?.price ?? 0}
+        apiEndpoint="/api/employer/credits/purchase"
+        body={selectedPackage !== null ? { packageId: selectedPackage } : {}}
+        onSuccess={handlePaymentSuccess}
+      />
     </div>
   );
 }

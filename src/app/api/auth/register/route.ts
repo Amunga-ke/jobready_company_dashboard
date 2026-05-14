@@ -99,6 +99,25 @@ export async function POST(request: Request) {
         },
       });
 
+      // 4. Auto-assign the Free plan subscription
+      const freePlan = await tx.subscriptionPlan.findUnique({
+        where: { slug: "free" },
+      });
+
+      if (freePlan) {
+        const now = new Date();
+        await tx.companySubscription.create({
+          data: {
+            companyId: company.id,
+            planId: freePlan.id,
+            status: "ACTIVE",
+            billingCycle: "MONTHLY",
+            currentPeriodStart: now,
+            currentPeriodEnd: new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000),
+          },
+        });
+      }
+
       return { user, company, profile };
     });
 
