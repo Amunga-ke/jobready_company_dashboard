@@ -14,6 +14,7 @@ import {
   Clock,
   Building2,
   UserCog,
+  CreditCard,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -63,6 +64,7 @@ const navSections = [
     items: [
       { href: "/dashboard/company", icon: Building2, label: "Company Profile" },
       { href: "/dashboard/team", icon: UserCog, label: "Team" },
+      { href: "/dashboard/billing", icon: CreditCard, label: "Billing" },
     ],
   },
   {

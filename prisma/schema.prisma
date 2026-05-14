@@ -7,7 +7,7 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// ─── Dashboard-Specific Models (NEW) ───
+// ─── Dashboard-Specific Models ───
 
 model EmployerProfile {
   id         String   @id @default(cuid()) @db.VarChar(64)
@@ -65,9 +65,15 @@ model Company {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  listings         Listing[]
-  employerProfiles EmployerProfile[]
-  teamMembers      TeamMember[]
+  listings            Listing[]
+  employerProfiles    EmployerProfile[]
+  teamMembers         TeamMember[]
+  subscriptions       CompanySubscription[]
+  jobCredit           JobCredit?
+  payments            Payment[]
+  featuredBoosts      FeaturedBoost[]
+  sentMessages        Message[]            @relation("CompanySent")
+  receivedMessages    Message[]            @relation("CompanyReceived")
 }
 
 // ─── User ───
@@ -94,6 +100,188 @@ model User {
   employerProfile  EmployerProfile?
   employerSettings EmployerSettings?
   teamMemberships  TeamMember[]
+  sentMessages     Message[]             @relation("UserSent")
+  receivedMessages Message[]             @relation("UserReceived")
+  notifications    Notification[]
+  payments         Payment[]
+}
+
+// ─── Subscription Plans ───
+
+model SubscriptionPlan {
+  id            String   @id @default(cuid()) @db.VarChar(64)
+  name          String   @unique @db.VarChar(50)
+  slug          String   @unique @db.VarChar(50)
+  description   String?  @db.Text
+  priceMonthly  Int      @default(0)
+  priceYearly   Int      @default(0)
+  currency      String   @default("KES") @db.VarChar(10)
+  maxListings   Int      @default(3)
+  maxFeatured   Int      @default(0)
+  maxCvSearches Int      @default(0)
+  maxTeamMembers Int     @default(1)
+  maxMessagesPerDay Int  @default(10)
+  isActive      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  features      String   @db.Text // JSON array of feature strings
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscriptions CompanySubscription[]
+}
+
+// ─── Company Subscription ───
+
+model CompanySubscription {
+  id               String    @id @default(cuid()) @db.VarChar(64)
+  companyId        String    @db.VarChar(64)
+  planId           String    @db.VarChar(64)
+  status           String    @default("ACTIVE") @db.VarChar(20) // ACTIVE, CANCELLED, EXPIRED, TRIAL
+  billingCycle     String    @default("MONTHLY") @db.VarChar(20) // MONTHLY, YEARLY
+  currentPeriodStart DateTime @default(now())
+  currentPeriodEnd   DateTime
+  cancelledAt      DateTime?
+  trialEndsAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  company Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plan    SubscriptionPlan   @relation(fields: [planId], references: [id])
+  payments Payment[]
+
+  @@unique([companyId, planId])
+}
+
+// ─── Payment ───
+
+model Payment {
+  id              String    @id @default(cuid()) @db.VarChar(64)
+  subscriptionId  String?   @db.VarChar(64)
+  boostId         String?   @db.VarChar(64)
+  companyId       String    @db.VarChar(64)
+  userId          String    @db.VarChar(64)
+  amount          Int
+  currency        String    @default("KES") @db.VarChar(10)
+  status          String    @default("PENDING") @db.VarChar(20)
+  paymentMethod   String    @db.VarChar(30)
+  paymentRef      String?   @db.VarChar(191)
+  itemType        String    @db.VarChar(30)
+  itemId          String?   @db.VarChar(64)
+  description     String    @db.VarChar(500)
+  metadata        String?   @db.Text
+  paidAt          DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  subscription CompanySubscription? @relation(fields: [subscriptionId], references: [id])
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user        User                @relation(fields: [userId], references: [id])
+  featuredBoost FeaturedBoost?    @relation(fields: [boostId], references: [id])
+
+  @@unique([boostId])
+  @@index([companyId, createdAt])
+  @@index([userId, createdAt])
+}
+
+// ─── Job Credits ───
+
+model JobCredit {
+  id              String   @id @default(cuid()) @db.VarChar(64)
+  companyId       String   @unique @db.VarChar(64)
+  balance         Int      @default(0) // Current available credits
+  totalPurchased  Int      @default(0) // Lifetime purchased
+  totalUsed       Int      @default(0) // Lifetime used
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company     Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transactions JobCreditTransaction[]
+}
+
+model JobCreditTransaction {
+  id          String   @id @default(cuid()) @db.VarChar(64)
+  creditId    String   @db.VarChar(64)
+  type        String   @db.VarChar(20) // PURCHASE, USAGE, REFUND, BONUS, ADMIN_ADJUST
+  amount      Int // Positive for purchase/refund/bonus, negative for usage
+  balanceAfter Int // Balance after this transaction
+  description String   @db.VarChar(500)
+  listingId   String?  @db.VarChar(64) // Listing ID if used for a job posting
+  paymentId   String?  @db.VarChar(64) // Payment ID if purchased
+  createdAt   DateTime @default(now())
+
+  credit  JobCredit @relation(fields: [creditId], references: [id], onDelete: Cascade)
+
+  @@index([creditId, createdAt])
+}
+
+// ─── Featured Listing Boost ───
+
+model FeaturedBoost {
+  id            String    @id @default(cuid()) @db.VarChar(64)
+  companyId     String    @db.VarChar(64)
+  listingId     String    @db.VarChar(64)
+  status        String    @default("PENDING") @db.VarChar(20)
+  startedAt     DateTime?
+  expiresAt     DateTime?
+  durationDays  Int      @default(7)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  payment Payment?
+
+  @@index([companyId, status])
+  @@index([listingId])
+}
+
+// ─── Messaging ───
+
+model Message {
+  id             String   @id @default(cuid()) @db.VarChar(64)
+  senderId       String   @db.VarChar(64) // User who sent
+  recipientId    String?  @db.VarChar(64) // User recipient (for applicant chat)
+  senderCompanyId String? @db.VarChar(64) // Company sender (if company sent)
+  recipientCompanyId String? @db.VarChar(64) // Company recipient
+  senderType     String   @db.VarChar(20) // USER, COMPANY
+  recipientType  String   @db.VarChar(20) // USER, COMPANY
+  subject        String?  @db.VarChar(300)
+  body           String   @db.Text
+  isRead         Boolean  @default(false)
+  parentId       String?  @db.VarChar(64) // For threaded replies
+  listingId      String?  @db.VarChar(64) // Related listing context
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  senderUser     User?              @relation("UserSent", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientUser  User?              @relation("UserReceived", fields: [recipientId], references: [id], onDelete: SetNull)
+  senderCompany  Company?           @relation("CompanySent", fields: [senderCompanyId], references: [id], onDelete: Cascade)
+  recipientCompany Company?         @relation("CompanyReceived", fields: [recipientCompanyId], references: [id], onDelete: SetNull)
+  parent         Message?           @relation("MessageReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies        Message[]          @relation("MessageReplies")
+  listing        Listing?           @relation(fields: [listingId], references: [id], onDelete: SetNull)
+
+  @@index([senderId, createdAt])
+  @@index([recipientId, createdAt])
+  @@index([senderCompanyId, createdAt])
+}
+
+// ─── Notifications ───
+
+model Notification {
+  id        String   @id @default(cuid()) @db.VarChar(64)
+  userId    String   @db.VarChar(64)
+  type      String   @db.VarChar(50) // APPLICATION_RECEIVED, STATUS_CHANGED, SUBSCRIPTION_EXPIRING, etc.
+  title     String   @db.VarChar(300)
+  body      String?  @db.Text
+  link      String?  @db.VarChar(500)
+  isRead    Boolean  @default(false)
+  metadata  String?  @db.Text // JSON for extra data
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
 }
 
 // ─── Category ───
@@ -179,9 +367,11 @@ model Listing {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  tags         ListingTag[]
-  savedJobs    SavedJob[]
-  applications Application[]
+  tags           ListingTag[]
+  savedJobs      SavedJob[]
+  applications   Application[]
+  featuredBoosts FeaturedBoost[]
+  messages       Message[]
 }
 
 // ─── ListingTag ───
@@ -277,7 +467,7 @@ model Article {
   category    String   @default("Career Tips") @db.VarChar(100)
   tags        String?  @db.VarChar(500)
   author      String   @default("JobReady Team") @db.VarChar(191)
-  authorImage String?  @db.VarChar(500)
+  authorImage String? @db.VarChar(500)
   status      String   @default("PUBLISHED") @db.VarChar(20)
   featured    Boolean  @default(false)
   readTime    Int      @default(5)
