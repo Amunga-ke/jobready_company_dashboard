@@ -100,8 +100,28 @@ export default function AnalyticsPage() {
         const funnelArray = json.applicationFunnel
           ? Object.entries(json.applicationFunnel).map(([status, count]) => ({ status, count }))
           : json.funnel || [];
+
+        // Normalize overview field names (API uses totalListingViews, frontend expects totalViews)
+        const rawOverview = json.overview || {};
+        const overview = {
+          totalViews: rawOverview.totalListingViews ?? rawOverview.totalViews ?? 0,
+          totalApplications: rawOverview.totalApplications ?? 0,
+          activeListings: rawOverview.activeListings ?? 0,
+          avgAppsPerListing: rawOverview.avgApplicationsPerListing ?? 0,
+        };
+
+        // Flatten recentApplications (API returns nested user/listing objects)
+        const recentActivity = (json.recentApplications || json.recentActivity || []).map((a: any) => ({
+          id: a.id,
+          applicantName: a.applicantName || a.user?.name || "Unknown",
+          applicantUserId: a.applicantUserId || a.user?.id || a.userId || "",
+          listingTitle: a.listingTitle || a.listing?.title || "",
+          appliedAt: a.appliedAt,
+          status: a.status,
+        }));
+
         setData({
-          overview: json.overview || {},
+          overview,
           funnel: funnelArray,
           trends30Day: json.dailyTrends || json.trends30Day || [],
           topListings: (json.topListings || []).map((l: any) => ({
@@ -111,7 +131,7 @@ export default function AnalyticsPage() {
             applications: l._count?.applications ?? l.applications ?? 0,
             status: l.status,
           })),
-          recentActivity: json.recentApplications || json.recentActivity || [],
+          recentActivity,
         });
       } catch {
         toast.error("Failed to load analytics");

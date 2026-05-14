@@ -93,7 +93,7 @@ export default function ListingsPage() {
       setListings(listings.map((l: any) => ({
         id: l.id,
         title: l.title,
-        category: l.category?.name || l.category || \"\",
+        category: l.category?.name || l.category || "",
         status: l.status,
         applicationCount: l._count?.applications ?? l.applicationCount ?? 0,
         views: l.viewCount ?? l.views ?? 0,

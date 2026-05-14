@@ -107,9 +107,21 @@ export default function PipelinePage() {
           for (const app of apps) {
             allApps.push({
               id: app.id,
-              applicantName: app.applicantName || app.applicantEmail || \"Unknown\",
+              applicantName: app.applicantName || app.applicantEmail || "Unknown",
               applicantUserId: app.applicantUserId,
-              listingTitle: app.listingTitle || \"\",\n              listingId: app.listingId,\n              status: app.status || status,\n              score: app.score,\n              coverLetter: app.coverLetter,\n              appliedAt: app.appliedAt,\n            });\n            if (app.listingId && !listingMap.has(app.listingId)) {\n              listingMap.set(app.listingId, { id: app.listingId, title: app.listingTitle });\n            }\n          }\n        }\n      }
+              listingTitle: app.listingTitle || "",
+              listingId: app.listingId,
+              status: app.status || status,
+              score: app.score,
+              coverLetter: app.coverLetter,
+              appliedAt: app.appliedAt,
+            });
+            if (app.listingId && !listingMap.has(app.listingId)) {
+              listingMap.set(app.listingId, { id: app.listingId, title: app.listingTitle });
+            }
+          }
+        }
+      }
       setData({ applications: allApps, listings: Array.from(listingMap.values()) });
     } catch {
       toast.error("Failed to load pipeline");

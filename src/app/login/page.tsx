@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Briefcase, Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -119,6 +120,13 @@ export default function LoginPage() {
             </Button>
           </form>
         </div>
+
+        <p className="text-center text-sm text-muted-foreground">
+          Don&apos;t have an account?{" "}
+          <Link href="/register" className="font-medium text-violet-600 hover:underline">
+            Register your company
+          </Link>
+        </p>
 
         <p className="text-center text-xs text-muted-foreground">
           JobReady Employer Dashboard &copy; {new Date().getFullYear()}
