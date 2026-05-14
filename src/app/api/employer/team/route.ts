@@ -36,6 +36,7 @@ export async function GET() {
 
     return NextResponse.json({
       members,
+      currentUserId: session.user.id,
       currentRole: currentUser?.role || "OWNER",
     });
   } catch (error) {

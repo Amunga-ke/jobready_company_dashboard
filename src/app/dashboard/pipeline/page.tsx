@@ -98,7 +98,19 @@ export default function PipelinePage() {
       const res = await fetch(`/api/employer/pipeline?${params}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
-      setData(json);
+      // API returns { PENDING: [...], SCREENING: [...], INTERVIEW: [...], ... }
+      // Transform to flat applications array + extract unique listings
+      const allApps: PipelineApplication[] = [];
+      const listingMap = new Map<string, EmployerListing>();
+      for (const [status, apps] of Object.entries(json)) {
+        if (Array.isArray(apps)) {
+          for (const app of apps) {
+            allApps.push({
+              id: app.id,
+              applicantName: app.applicantName || app.applicantEmail || \"Unknown\",
+              applicantUserId: app.applicantUserId,
+              listingTitle: app.listingTitle || \"\",\n              listingId: app.listingId,\n              status: app.status || status,\n              score: app.score,\n              coverLetter: app.coverLetter,\n              appliedAt: app.appliedAt,\n            });\n            if (app.listingId && !listingMap.has(app.listingId)) {\n              listingMap.set(app.listingId, { id: app.listingId, title: app.listingTitle });\n            }\n          }\n        }\n      }
+      setData({ applications: allApps, listings: Array.from(listingMap.values()) });
     } catch {
       toast.error("Failed to load pipeline");
     } finally {

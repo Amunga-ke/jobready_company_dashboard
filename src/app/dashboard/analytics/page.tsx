@@ -95,7 +95,24 @@ export default function AnalyticsPage() {
         const res = await fetch("/api/employer/analytics");
         if (!res.ok) throw new Error("Failed to fetch");
         const json = await res.json();
-        setData(json);
+        // API returns: { overview, applicationFunnel, topListings, recentApplications, dailyTrends }
+        // Map to frontend field names: { overview, funnel, trends30Day, topListings, recentActivity }
+        const funnelArray = json.applicationFunnel
+          ? Object.entries(json.applicationFunnel).map(([status, count]) => ({ status, count }))
+          : json.funnel || [];
+        setData({
+          overview: json.overview || {},
+          funnel: funnelArray,
+          trends30Day: json.dailyTrends || json.trends30Day || [],
+          topListings: (json.topListings || []).map((l: any) => ({
+            id: l.id,
+            title: l.title,
+            views: l.viewCount ?? l.views ?? 0,
+            applications: l._count?.applications ?? l.applications ?? 0,
+            status: l.status,
+          })),
+          recentActivity: json.recentApplications || json.recentActivity || [],
+        });
       } catch {
         toast.error("Failed to load analytics");
       } finally {

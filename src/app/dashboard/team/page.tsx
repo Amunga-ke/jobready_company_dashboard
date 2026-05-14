@@ -109,7 +109,22 @@ export default function TeamPage() {
       const res = await fetch("/api/employer/team");
       if (!res.ok) throw new Error("Failed");
       const json = await res.json();
-      setData(json);
+      // API returns { members: [{ companyId, userId, role, isActive, createdAt, user: { id, name, email, avatarUrl } }], currentRole }
+      // Flatten to match frontend interface
+      const flatMembers: TeamMember[] = (json.members || []).map((m: any) => ({
+        id: m.user?.id || m.userId,
+        name: m.user?.name || m.userId,
+        email: m.user?.email || "",
+        role: m.role || "MEMBER",
+        isActive: m.isActive ?? true,
+        joinedAt: m.createdAt,
+        avatarUrl: m.user?.avatarUrl || null,
+      }));
+      setData({
+        members: flatMembers,
+        currentUserId: json.currentUserId || "",
+        currentUserRole: json.currentRole || json.currentUserRole || "OWNER",
+      });
     } catch {
       toast.error("Failed to load team");
     } finally {
@@ -128,7 +143,7 @@ export default function TeamPage() {
     }
     setInviting(true);
     try {
-      const res = await fetch("/api/employer/team/invite", {
+      const res = await fetch("/api/employer/team", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),

@@ -88,3 +88,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+// Helper to get company listings for pipeline filter
+async function getCompanyListings(companyId: string) {
+  return prisma.listing.findMany({
+    where: { companyId, status: { in: ["ACTIVE", "DRAFT", "PAUSED"] } },
+    select: { id: true, title: true },
+    orderBy: { title: "asc" },
+  });
+}

@@ -117,13 +117,16 @@ export default function ApplicationsPage() {
       if (listingFilter !== "ALL") params.set("listingId", listingFilter);
       if (scoreFilter !== "ALL") params.set("scoreFilter", scoreFilter);
       params.set("sortBy", sortBy);
-      params.set("sortOrder", sortOrder);
+      params.set("sortDir", sortOrder);
       const res = await fetch(`/api/employer/applications?${params}`);
       if (!res.ok) throw new Error("Failed to fetch");
-      const data: ApplicationsResponse = await res.json();
-      setApplications(data.applications);
-      setTotal(data.total);
-      setTotalPages(data.totalPages);
+      const json = await res.json();
+      // API returns { data: [...], pagination: { page, limit, total, totalPages } }
+      const applications = json.data || json.applications || [];
+      const pagination = json.pagination || {};
+      setApplications(applications);
+      setTotal(pagination.total ?? json.total ?? 0);
+      setTotalPages(pagination.totalPages ?? json.totalPages ?? 1);
     } catch {
       toast.error("Failed to load applications");
     } finally {
@@ -140,8 +143,9 @@ export default function ApplicationsPage() {
       try {
         const res = await fetch("/api/employer/listings?limit=100&status=ACTIVE");
         if (!res.ok) return;
-        const data = await res.json();
-        setListings(data.listings || []);
+        const json = await res.json();
+        const listingData = json.data || json.listings || [];
+        setListings(listingData.map((l: any) => ({ id: l.id, title: l.title })));
       } catch {
         // ignore
       }
@@ -182,10 +186,10 @@ export default function ApplicationsPage() {
   const handleBulkStatusChange = async (newStatus: string) => {
     if (selectedIds.size === 0) return;
     try {
-      const res = await fetch("/api/employer/applications/bulk-status", {
+      const res = await fetch("/api/employer/applications/bulk", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: Array.from(selectedIds), status: newStatus }),
+        body: JSON.stringify({ applicationIds: Array.from(selectedIds), status: newStatus }),
       });
       if (!res.ok) throw new Error("Failed");
       toast.success(`${selectedIds.size} application(s) updated`);

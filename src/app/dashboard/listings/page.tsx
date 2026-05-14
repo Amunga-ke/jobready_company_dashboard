@@ -86,10 +86,21 @@ export default function ListingsPage() {
       if (statusFilter !== "ALL") params.set("status", statusFilter);
       const res = await fetch(`/api/employer/listings?${params}`);
       if (!res.ok) throw new Error("Failed to fetch");
-      const data: ListingsResponse = await res.json();
-      setListings(data.listings);
-      setTotal(data.total);
-      setTotalPages(data.totalPages);
+      const json = await res.json();
+      // API returns { data: [...], pagination: { page, limit, total, totalPages } }
+      const listings = json.data || json.listings || [];
+      const pagination = json.pagination || {};
+      setListings(listings.map((l: any) => ({
+        id: l.id,
+        title: l.title,
+        category: l.category?.name || l.category || \"\",
+        status: l.status,
+        applicationCount: l._count?.applications ?? l.applicationCount ?? 0,
+        views: l.viewCount ?? l.views ?? 0,
+        createdAt: l.createdAt,
+      })));
+      setTotal(pagination.total ?? json.total ?? 0);
+      setTotalPages(pagination.totalPages ?? json.totalPages ?? 1);
     } catch {
       toast.error("Failed to load listings");
     } finally {
@@ -134,7 +145,7 @@ export default function ListingsPage() {
     const newStatus = listing.status === "PAUSED" ? "ACTIVE" : "PAUSED";
     try {
       const res = await fetch(`/api/employer/listings/${listing.id}`, {
-        method: "PATCH",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });

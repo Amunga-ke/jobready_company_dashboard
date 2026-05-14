@@ -90,7 +90,13 @@ export async function PUT(
       deadline,
       featured,
       status,
+      tagIds,
     } = body;
+
+    // Handle tag updates: delete existing, create new
+    if (tagIds !== undefined) {
+      await prisma.listingTag.deleteMany({ where: { listingId: id } });
+    }
 
     const listing = await prisma.listing.update({
       where: { id },
@@ -110,6 +116,13 @@ export async function PUT(
         ...(deadline !== undefined && { deadline: deadline ? new Date(deadline) : null }),
         ...(featured !== undefined && { featured }),
         ...(status !== undefined && { status }),
+        ...(tagIds !== undefined && {
+          tags: tagIds.length > 0
+            ? {
+                create: tagIds.map((tagId: string) => ({ tagId })),
+              }
+            : undefined,
+        }),
       },
       include: {
         category: true,
