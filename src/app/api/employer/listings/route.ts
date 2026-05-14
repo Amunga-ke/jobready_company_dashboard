@@ -42,6 +42,10 @@ export async function GET(request: Request) {
           subcategory: true,
           tags: { include: { tag: true } },
           _count: { select: { applications: true } },
+          featuredBoosts: {
+            where: { status: "ACTIVE" },
+            select: { id: true, expiresAt: true },
+          },
         },
       }),
       prisma.listing.count({ where }),

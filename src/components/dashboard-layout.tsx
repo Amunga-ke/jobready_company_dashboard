@@ -10,6 +10,7 @@ import {
   BarChart3,
   FileText,
   Users,
+  MessageSquare,
   Kanban,
   Clock,
   Building2,
@@ -22,12 +23,14 @@ import {
   Plus,
   LogOut,
   X,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { NotificationBell } from "@/components/notification-bell";
 
 interface DashboardLayoutProps {
   user: {
@@ -44,6 +47,7 @@ interface DashboardLayoutProps {
     verified: boolean;
   };
   teamCount: number;
+  unreadMessageCount?: number;
   children: React.ReactNode;
 }
 
@@ -55,6 +59,8 @@ const navSections = [
       { href: "/dashboard/analytics", icon: BarChart3, label: "Analytics" },
       { href: "/dashboard/listings", icon: FileText, label: "My Listings" },
       { href: "/dashboard/applicants", icon: Users, label: "Applicants" },
+      { href: "/dashboard/cv-search", icon: Search, label: "CV Search" },
+      { href: "/dashboard/messages", icon: MessageSquare, label: "Messages" },
       { href: "/dashboard/pipeline", icon: Kanban, label: "Pipeline" },
       { href: "/dashboard/deadlines", icon: Clock, label: "Deadlines" },
     ],
@@ -88,6 +94,7 @@ export function DashboardLayout({
   user,
   company,
   teamCount,
+  unreadMessageCount = 0,
   children,
 }: DashboardLayoutProps) {
   const pathname = usePathname();
@@ -136,6 +143,7 @@ export function DashboardLayout({
               <div className="space-y-1">
                 {section.items.map((item) => {
                   const active = isActive(item.href);
+                  const showBadge = item.href === "/dashboard/messages" && unreadMessageCount > 0;
                   return (
                     <Link
                       key={item.href}
@@ -156,11 +164,25 @@ export function DashboardLayout({
                             active ? "text-violet-300" : "text-violet-400 group-hover:text-violet-300"
                           )}
                         />
+                        {showBadge && (
+                          <span className="absolute -top-1.5 -right-2 h-4 min-w-[16px] rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center px-1">
+                            {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
+                          </span>
+                        )}
                         {active && (
                           <div className="absolute -left-3 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-full bg-violet-400" />
                         )}
                       </div>
-                      {!collapsed && <span>{item.label}</span>}
+                      {!collapsed && (
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <span className="truncate">{item.label}</span>
+                          {showBadge && (
+                            <span className="h-5 min-w-[20px] rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center px-1 shrink-0">
+                              {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </Link>
                   );
                 })}
@@ -292,7 +314,8 @@ export function DashboardLayout({
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex-1" />
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <NotificationBell />
             <div className="hidden text-right sm:block">
               <p className="text-sm font-medium text-gray-900">{company.name}</p>
               <p className="text-xs text-gray-500">{user.role}</p>

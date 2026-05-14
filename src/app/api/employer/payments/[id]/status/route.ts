@@ -3,6 +3,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { addCredits } from "@/lib/credits";
+import {
+  createNotification,
+  NOTIFICATION_TYPES,
+} from "@/lib/notifications";
 
 /**
  * GET /api/employer/payments/[id]/status
@@ -38,6 +42,11 @@ export async function GET(
         subscription: {
           include: { plan: { select: { name: true, slug: true } } },
         },
+        featuredBoost: {
+          include: {
+            listing: { select: { id: true, title: true, slug: true } },
+          },
+        },
       },
     });
 
@@ -50,7 +59,7 @@ export async function GET(
       return NextResponse.json({ error: "Payment not found" }, { status: 404 });
     }
 
-    // ─── Safety net: activate subscription or add credits if payment completed ───
+    // ─── Safety net: activate subscription, add credits, or activate featured boost ───
     let activationNotice: string | null = null;
 
     if (payment.status === "COMPLETED") {
@@ -69,6 +78,25 @@ export async function GET(
             data: { status: "ACTIVE" },
           });
           activationNotice = "Subscription activated successfully.";
+
+          // Notify: subscription activated (once per payment)
+          const existingSubNotif = await prisma.notification.findFirst({
+            where: {
+              userId: session.user.id,
+              type: NOTIFICATION_TYPES.SUBSCRIPTION_ACTIVATED,
+              metadata: { contains: payment.id },
+            },
+          });
+          if (!existingSubNotif) {
+            await createNotification({
+              userId: session.user.id,
+              type: NOTIFICATION_TYPES.SUBSCRIPTION_ACTIVATED,
+              title: "Subscription activated",
+              body: `Your ${payment.subscription.plan?.name || "subscription"} plan is now active. Enjoy your upgraded features!`,
+              link: "/dashboard/billing",
+              metadata: { paymentId: payment.id, subscriptionId: payment.subscriptionId },
+            });
+          }
         }
       }
 
@@ -90,6 +118,69 @@ export async function GET(
               payment.id
             );
             activationNotice = `${creditAmount} credits added to your account.`;
+
+            // Notify: credits purchased (once per payment)
+            const existingCreditNotif = await prisma.notification.findFirst({
+              where: {
+                userId: session.user.id,
+                type: NOTIFICATION_TYPES.CREDIT_PURCHASED,
+                metadata: { contains: payment.id },
+              },
+            });
+            if (!existingCreditNotif) {
+              await createNotification({
+                userId: session.user.id,
+                type: NOTIFICATION_TYPES.CREDIT_PURCHASED,
+                title: `${creditAmount} credits added`,
+                body: `Your purchase of ${creditAmount} job credits has been processed successfully.`,
+                link: "/dashboard/billing/credits",
+                metadata: { paymentId: payment.id, creditAmount },
+              });
+            }
+          }
+        }
+      }
+
+      // Check featured boost activation
+      if (
+        payment.itemType === "FEATURED_BOOST" &&
+        payment.boostId &&
+        payment.featuredBoost
+      ) {
+        if (payment.featuredBoost.status === "PENDING") {
+          const now = new Date();
+          const expiresAt = new Date(
+            now.getTime() + payment.featuredBoost.durationDays * 24 * 60 * 60 * 1000
+          );
+
+          await prisma.featuredBoost.update({
+            where: { id: payment.boostId },
+            data: {
+              status: "ACTIVE",
+              startedAt: now,
+              expiresAt,
+            },
+          });
+
+          activationNotice = "Featured boost activated!";
+
+          // Notify: featured boost activated (once per payment)
+          const existingBoostNotif = await prisma.notification.findFirst({
+            where: {
+              userId: session.user.id,
+              type: NOTIFICATION_TYPES.FEATURED_BOOST_ACTIVE,
+              metadata: { contains: payment.id },
+            },
+          });
+          if (!existingBoostNotif) {
+            await createNotification({
+              userId: session.user.id,
+              type: NOTIFICATION_TYPES.FEATURED_BOOST_ACTIVE,
+              title: "Featured boost is live!",
+              body: `"${payment.featuredBoost.listing?.title || "Your listing"}" is now featured and will receive increased visibility for ${payment.featuredBoost.durationDays} days.`,
+              link: `/dashboard/listings/${payment.featuredBoost.listingId}/edit`,
+              metadata: { paymentId: payment.id, boostId: payment.boostId, listingId: payment.featuredBoost.listingId },
+            });
           }
         }
       }

@@ -15,7 +15,10 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
+  Star,
+  Zap,
 } from "lucide-react";
+import BoostListingDialog from "@/components/boost-listing-dialog";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +59,9 @@ interface Listing {
   applicationCount: number;
   views: number;
   createdAt: string;
+  featured: boolean;
+  hasActiveBoost: boolean;
+  boostExpiresAt?: string | null;
 }
 
 interface ListingsResponse {
@@ -76,6 +82,7 @@ export default function ListingsPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [boostListing, setBoostListing] = useState<Listing | null>(null);
 
   const fetchListings = useCallback(async () => {
     setLoading(true);
@@ -98,6 +105,9 @@ export default function ListingsPage() {
         applicationCount: l._count?.applications ?? l.applicationCount ?? 0,
         views: l.viewCount ?? l.views ?? 0,
         createdAt: l.createdAt,
+        featured: l.featured || false,
+        hasActiveBoost: (l.featuredBoosts?.length ?? 0) > 0,
+        boostExpiresAt: l.featuredBoosts?.[0]?.expiresAt || null,
       })));
       setTotal(pagination.total ?? json.total ?? 0);
       setTotalPages(pagination.totalPages ?? json.totalPages ?? 1);
@@ -246,12 +256,20 @@ export default function ListingsPage() {
                   {listings.map((listing) => (
                     <TableRow key={listing.id}>
                       <TableCell>
-                        <Link
-                          href={`/dashboard/listings/${listing.id}/edit`}
-                          className="text-sm font-medium text-violet-600 hover:underline"
-                        >
-                          {listing.title}
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/dashboard/listings/${listing.id}/edit`}
+                            className="text-sm font-medium text-violet-600 hover:underline"
+                          >
+                            {listing.title}
+                          </Link>
+                          {(listing.featured || listing.hasActiveBoost) && (
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 whitespace-nowrap">
+                              <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+                              Featured
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-sm text-gray-500">
                         {listing.category}
@@ -267,48 +285,70 @@ export default function ListingsPage() {
                         {format(new Date(listing.createdAt), "MMM d, yyyy")}
                       </TableCell>
                       <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                              <Link href={`/dashboard/listings/${listing.id}/edit`}>
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Edit
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDuplicate(listing.id)}>
-                              <Copy className="mr-2 h-4 w-4" />
-                              Duplicate
-                            </DropdownMenuItem>
-                            {(listing.status === "ACTIVE" || listing.status === "PAUSED") && (
-                              <DropdownMenuItem onClick={() => handleTogglePause(listing)}>
-                                {listing.status === "PAUSED" ? (
-                                  <>
-                                    <Play className="mr-2 h-4 w-4" />
-                                    Resume
-                                  </>
-                                ) : (
-                                  <>
-                                    <Pause className="mr-2 h-4 w-4" />
-                                    Pause
-                                  </>
-                                )}
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-red-600"
-                              onClick={() => setDeleteId(listing.id)}
+                        <div className="flex items-center gap-1">
+                          {listing.status === "ACTIVE" && !listing.hasActiveBoost && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                              onClick={() => setBoostListing(listing)}
+                              title="Boost listing for extra visibility"
                             >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                              <Zap className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link href={`/dashboard/listings/${listing.id}/edit`}>
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  Edit
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleDuplicate(listing.id)}>
+                                <Copy className="mr-2 h-4 w-4" />
+                                Duplicate
+                              </DropdownMenuItem>
+                              {(listing.status === "ACTIVE" || listing.status === "PAUSED") && (
+                                <DropdownMenuItem onClick={() => handleTogglePause(listing)}>
+                                  {listing.status === "PAUSED" ? (
+                                    <>
+                                      <Play className="mr-2 h-4 w-4" />
+                                      Resume
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Pause className="mr-2 h-4 w-4" />
+                                      Pause
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                              )}
+                              {listing.status === "ACTIVE" && !listing.hasActiveBoost && (
+                                <DropdownMenuItem
+                                  className="text-amber-600"
+                                  onClick={() => setBoostListing(listing)}
+                                >
+                                  <Zap className="mr-2 h-4 w-4" />
+                                  Boost Listing
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-red-600"
+                                onClick={() => setDeleteId(listing.id)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -365,6 +405,19 @@ export default function ListingsPage() {
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Boost Listing Dialog */}
+      {boostListing && (
+        <BoostListingDialog
+          open={!!boostListing}
+          onOpenChange={(open) => {
+            if (!open) setBoostListing(null);
+          }}
+          listingId={boostListing.id}
+          listingTitle={boostListing.title}
+          onSuccess={() => fetchListings()}
+        />
       )}
 
       {/* Delete Confirmation */}

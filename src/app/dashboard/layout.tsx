@@ -39,6 +39,16 @@ export default async function DashboardRootLayout({
 
   const company = employerProfile.company;
 
+  // Fetch unread message count for sidebar badge
+  const [unreadMessages] = await Promise.all([
+    prisma.message.count({
+      where: {
+        recipientCompanyId: company.id,
+        isRead: false,
+      },
+    }),
+  ]);
+
   return (
     <DashboardLayout
       user={{
@@ -55,6 +65,7 @@ export default async function DashboardRootLayout({
         verified: company.verified,
       }}
       teamCount={company.teamMembers.length}
+      unreadMessageCount={unreadMessages}
     >
       {children}
     </DashboardLayout>
