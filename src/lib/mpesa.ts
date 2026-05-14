@@ -8,6 +8,8 @@ const MPESA_BASE_URL =
     : "https://sandbox.safaricom.co.ke";
 
 const MPESA_BUSINESS_SHORTCODE = process.env.MPESA_BUSINESS_SHORTCODE || "174379";
+const MPESA_TRANSACTION_TYPE = process.env.MPESA_TRANSACTION_TYPE || "CustomerPayBillOnline";
+const MPESA_PARTY_B = process.env.MPESA_PARTY_B || MPESA_BUSINESS_SHORTCODE;
 const MPESA_CONSUMER_KEY = process.env.MPESA_CONSUMER_KEY || "";
 const MPESA_CONSUMER_SECRET = process.env.MPESA_CONSUMER_SECRET || "";
 const MPESA_PASSKEY = process.env.MPESA_PASSKEY || "";
@@ -146,10 +148,10 @@ export async function initiateSTKPush(params: {
     BusinessShortCode: MPESA_BUSINESS_SHORTCODE,
     Password: password,
     Timestamp: timestamp,
-    TransactionType: "CustomerPayBillOnline",
+    TransactionType: MPESA_TRANSACTION_TYPE,
     Amount: Math.round(params.amount),
     PartyA: formattedPhone,
-    PartyB: MPESA_BUSINESS_SHORTCODE,
+    PartyB: MPESA_PARTY_B,
     PhoneNumber: formattedPhone,
     CallBackURL: `${MPESA_CALLBACK_URL}?paymentId=${params.reference}`,
     AccountReference: accountRef,
