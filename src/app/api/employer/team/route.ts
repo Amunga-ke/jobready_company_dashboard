@@ -67,6 +67,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "email is required" }, { status: 400 });
     }
 
+    // Validate role: only OWNER/ADMIN can assign roles other than MEMBER
+    const resolvedRole = role || "MEMBER";
+    if (
+      resolvedRole !== "MEMBER" &&
+      !["OWNER", "ADMIN"].includes(profile.role)
+    ) {
+      return NextResponse.json(
+        { error: "Only owners and admins can assign roles other than MEMBER" },
+        { status: 403 }
+      );
+    }
+
     // Find user by email
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
@@ -102,7 +114,7 @@ export async function POST(request: Request) {
       data: {
         companyId: profile.companyId,
         userId: user.id,
-        role: role || "MEMBER",
+        role: resolvedRole,
       },
       include: {
         user: {

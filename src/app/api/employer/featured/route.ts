@@ -179,36 +179,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid duration for pricing" }, { status: 400 });
     }
 
-    // Create FeaturedBoost record with status PENDING
-    const boost = await prisma.featuredBoost.create({
-      data: {
-        companyId: profile.companyId,
-        listingId,
-        status: "PENDING",
-        durationDays,
-      },
-    });
-
-    // Create Payment record
-    const payment = await prisma.payment.create({
-      data: {
-        boostId: boost.id,
-        companyId: profile.companyId,
-        userId: session.user.id,
-        amount: price,
-        currency: "KES",
-        status: "PENDING",
-        paymentMethod: "MPESA",
-        itemType: "FEATURED_BOOST",
-        itemId: boost.id,
-        description: `Featured boost for "${listing.title}" — ${durationDays} days`,
-        metadata: JSON.stringify({
-          boostId: boost.id,
+    // Create FeaturedBoost and Payment records atomically
+    const [boost, payment] = await prisma.$transaction(async (tx) => {
+      const boost = await tx.featuredBoost.create({
+        data: {
+          companyId: profile.companyId,
           listingId,
-          listingTitle: listing.title,
+          status: "PENDING",
           durationDays,
-        }),
-      },
+        },
+      });
+
+      const payment = await tx.payment.create({
+        data: {
+          boostId: boost.id,
+          companyId: profile.companyId,
+          userId: session.user.id,
+          amount: price,
+          currency: "KES",
+          status: "PENDING",
+          paymentMethod: "MPESA",
+          itemType: "FEATURED_BOOST",
+          itemId: boost.id,
+          description: `Featured boost for "${listing.title}" — ${durationDays} days`,
+          metadata: JSON.stringify({
+            boostId: boost.id,
+            listingId,
+            listingTitle: listing.title,
+            durationDays,
+          }),
+        },
+      });
+
+      return [boost, payment];
     });
 
     // Initiate STK push

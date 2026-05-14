@@ -30,6 +30,7 @@ export async function getCompanyCredits(companyId: string): Promise<CreditBalanc
 
 /**
  * Deduct credits from a company's balance and create a USAGE transaction.
+ * Uses an interactive transaction to prevent race conditions (double-spend).
  * Throws if insufficient balance.
  */
 export async function deductCredit(
@@ -42,25 +43,26 @@ export async function deductCredit(
     throw new Error("Amount to deduct must be positive");
   }
 
-  const credit = await prisma.jobCredit.findUnique({
-    where: { companyId },
-  });
+  await prisma.$transaction(async (tx) => {
+    const credit = await tx.jobCredit.findUniqueOrThrow({
+      where: { companyId },
+    });
 
-  if (!credit || credit.balance < amount) {
-    throw new Error("Insufficient credits");
-  }
+    if (credit.balance < amount) {
+      throw new Error("Insufficient credits");
+    }
 
-  const newBalance = credit.balance - amount;
+    const newBalance = credit.balance - amount;
 
-  await prisma.$transaction([
-    prisma.jobCredit.update({
+    await tx.jobCredit.update({
       where: { companyId },
       data: {
         balance: newBalance,
         totalUsed: { increment: amount },
       },
-    }),
-    prisma.jobCreditTransaction.create({
+    });
+
+    await tx.jobCreditTransaction.create({
       data: {
         creditId: credit.id,
         type: "USAGE",
@@ -69,12 +71,13 @@ export async function deductCredit(
         description,
         listingId,
       },
-    }),
-  ]);
+    });
+  });
 }
 
 /**
  * Add credits to a company's balance and create a transaction record.
+ * Uses an interactive transaction for atomicity.
  */
 export async function addCredits(
   companyId: string,
@@ -87,28 +90,29 @@ export async function addCredits(
     throw new Error("Amount to add must be positive");
   }
 
-  const credit = await prisma.jobCredit.upsert({
-    where: { companyId },
-    update: {},
-    create: {
-      companyId,
-      balance: 0,
-      totalPurchased: 0,
-      totalUsed: 0,
-    },
-  });
+  await prisma.$transaction(async (tx) => {
+    const credit = await tx.jobCredit.upsert({
+      where: { companyId },
+      update: {},
+      create: {
+        companyId,
+        balance: 0,
+        totalPurchased: 0,
+        totalUsed: 0,
+      },
+    });
 
-  const newBalance = credit.balance + amount;
+    const newBalance = credit.balance + amount;
 
-  await prisma.$transaction([
-    prisma.jobCredit.update({
+    await tx.jobCredit.update({
       where: { companyId },
       data: {
         balance: newBalance,
         ...(type === "PURCHASE" ? { totalPurchased: { increment: amount } } : {}),
       },
-    }),
-    prisma.jobCreditTransaction.create({
+    });
+
+    await tx.jobCreditTransaction.create({
       data: {
         creditId: credit.id,
         type,
@@ -117,8 +121,8 @@ export async function addCredits(
         description,
         paymentId,
       },
-    }),
-  ]);
+    });
+  });
 }
 
 /**

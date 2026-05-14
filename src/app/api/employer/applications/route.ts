@@ -22,7 +22,10 @@ export async function GET(request: Request) {
     const status = searchParams.get("status");
     const listingId = searchParams.get("listingId");
     const scoreFilter = searchParams.get("scoreFilter"); // "RATED" or "UNRATED"
-    const sortBy = searchParams.get("sortBy") || "appliedAt";
+    const ALLOWED_SORT = ["appliedAt", "score", "createdAt"];
+    const sortBy = ALLOWED_SORT.includes(searchParams.get("sortBy") || "")
+      ? searchParams.get("sortBy")!
+      : "appliedAt";
     const sortDir = searchParams.get("sortDir") || "desc";
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);

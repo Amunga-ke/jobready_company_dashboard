@@ -43,16 +43,24 @@ export async function GET(request: Request) {
       baseWhere.isRead = false;
     }
 
-    // Fetch all messages for this company with user and listing info
-    const messages = await prisma.message.findMany({
-      where: baseWhere,
-      include: {
-        senderUser: { select: { id: true, name: true, avatarUrl: true } },
-        recipientUser: { select: { id: true, name: true, avatarUrl: true } },
-        listing: { select: { id: true, title: true } },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    // Fetch messages with DB-level pagination (bounded query)
+    const skip = (page - 1) * limit;
+    const [messages, totalCount] = await Promise.all([
+      prisma.message.findMany({
+        where: baseWhere,
+        include: {
+          senderUser: { select: { id: true, name: true, avatarUrl: true } },
+          recipientUser: { select: { id: true, name: true, avatarUrl: true } },
+          listing: { select: { id: true, title: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.message.count({
+        where: baseWhere,
+      }),
+    ]);
 
     // Group by conversation partner (the other user in the conversation)
     const conversationMap = new Map<
@@ -138,12 +146,9 @@ export async function GET(request: Request) {
       conversations = conversations.filter((c) => c.unreadCount > 0);
     }
 
-    const total = conversations.length;
+    const total = totalCount;
     const totalPages = Math.ceil(total / limit);
-    const paginatedConversations = conversations.slice(
-      (page - 1) * limit,
-      page * limit
-    );
+    const paginatedConversations = conversations;
 
     return NextResponse.json({
       conversations: paginatedConversations.map((c) => ({

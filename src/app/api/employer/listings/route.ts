@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = parseInt(searchParams.get("limit") || "10", 10);
+    const limit = Math.min(parseInt(searchParams.get("limit") || "10", 10), 100);
     const skip = (page - 1) * limit;
 
     const where: Record<string, unknown> = { companyId: profile.companyId };

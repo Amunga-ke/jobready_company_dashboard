@@ -47,6 +47,7 @@ export async function GET() {
       totalApplications,
       profileViews: profileViews._sum.viewCount ?? 0,
       newApplicationsToday,
+      newToday: newApplicationsToday,
     });
   } catch (error) {
     console.error("Error fetching employer stats:", error);

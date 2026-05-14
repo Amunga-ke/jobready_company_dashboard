@@ -45,24 +45,29 @@ export async function GET(request: Request) {
       whereBase.listingId = listingId;
     }
 
-    // Fetch all applications grouped by status
-    const pipeline: Record<string, PipelineApplication[]> = {};
-
-    for (const status of PIPELINE_STATUSES) {
-      const applications = await prisma.application.findMany({
-        where: { ...whereBase, status },
-        orderBy: { appliedAt: "desc" },
-        include: {
-          user: {
-            select: { id: true, name: true, email: true, avatarUrl: true },
-          },
-          listing: {
-            select: { id: true, title: true },
-          },
+    // Fetch all applications once and group by status in JavaScript
+    const allApplications = await prisma.application.findMany({
+      where: whereBase,
+      orderBy: { appliedAt: "desc" },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, avatarUrl: true },
         },
-      });
+        listing: {
+          select: { id: true, title: true },
+        },
+      },
+    });
 
-      pipeline[status] = applications.map((app: typeof applications[number]) => ({
+    // Initialize pipeline with empty arrays for all statuses
+    const pipeline: Record<string, PipelineApplication[]> = {};
+    for (const status of PIPELINE_STATUSES) {
+      pipeline[status] = [];
+    }
+
+    // Group applications by status
+    for (const app of allApplications) {
+      const mapped: PipelineApplication = {
         id: app.id,
         applicantName: app.user.name,
         applicantEmail: app.user.email,
@@ -79,7 +84,13 @@ export async function GET(request: Request) {
         notes: app.notes,
         appliedAt: app.appliedAt,
         status: app.status,
-      }));
+      };
+
+      if (pipeline[app.status]) {
+        pipeline[app.status].push(mapped);
+      } else {
+        pipeline[app.status] = [mapped];
+      }
     }
 
     return NextResponse.json(pipeline);

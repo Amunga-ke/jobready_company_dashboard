@@ -100,6 +100,11 @@ export async function DELETE(
       return NextResponse.json({ error: "Employer profile not found" }, { status: 404 });
     }
 
+    // Only ADMIN can remove team members
+    if (!["OWNER", "ADMIN"].includes(profile.role)) {
+      return NextResponse.json({ error: "Only admins can remove team members" }, { status: 403 });
+    }
+
     const { id } = await params;
 
     const member = await prisma.teamMember.findFirst({

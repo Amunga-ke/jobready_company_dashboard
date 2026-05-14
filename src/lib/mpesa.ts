@@ -7,13 +7,24 @@ const MPESA_BASE_URL =
     ? "https://api.safaricom.co.ke"
     : "https://sandbox.safaricom.co.ke";
 
-const MPESA_BUSINESS_SHORTCODE = process.env.MPESA_BUSINESS_SHORTCODE || "174379";
+// Production validation: these MUST be set via env vars
+function getEnvOrThrow(key: string): string {
+  const value = process.env[key];
+  if (!value && process.env.MPESA_ENVIRONMENT === "production") {
+    throw new Error(
+      `${key} is required in production. Set it as an environment variable.`
+    );
+  }
+  return value || "";
+}
+
+const MPESA_BUSINESS_SHORTCODE = getEnvOrThrow("MPESA_BUSINESS_SHORTCODE");
 const MPESA_TRANSACTION_TYPE = process.env.MPESA_TRANSACTION_TYPE || "CustomerPayBillOnline";
-const MPESA_PARTY_B = process.env.MPESA_PARTY_B || MPESA_BUSINESS_SHORTCODE;
-const MPESA_CONSUMER_KEY = process.env.MPESA_CONSUMER_KEY || "";
-const MPESA_CONSUMER_SECRET = process.env.MPESA_CONSUMER_SECRET || "";
-const MPESA_PASSKEY = process.env.MPESA_PASSKEY || "";
-const MPESA_CALLBACK_URL = process.env.MPESA_CALLBACK_URL || "";
+const MPESA_PARTY_B = process.env.MPESA_PARTY_B || MPESA_BUSINESS_SHORTCODE || "174379";
+const MPESA_CONSUMER_KEY = getEnvOrThrow("MPESA_CONSUMER_KEY");
+const MPESA_CONSUMER_SECRET = getEnvOrThrow("MPESA_CONSUMER_SECRET");
+const MPESA_PASSKEY = getEnvOrThrow("MPESA_PASSKEY");
+const MPESA_CALLBACK_URL = getEnvOrThrow("MPESA_CALLBACK_URL");
 
 // ─── Token caching ───
 let cachedToken: string | null = null;
@@ -95,7 +106,7 @@ export function isValidMpesaPhone(phone: string): boolean {
 }
 
 /**
- * Generate the Daraja timestamp in "YYYYMMDDHHmmss" format (UTC).
+ * Generate the Daraja timestamp in "YYYYMMDDHHmmss" format.
  */
 function generateTimestamp(): string {
   const now = new Date();
