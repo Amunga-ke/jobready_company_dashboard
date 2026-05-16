@@ -24,6 +24,7 @@ import {
   LogOut,
   X,
   Search,
+  Share2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,7 @@ const navSections = [
     label: "Company",
     items: [
       { href: "/dashboard/company", icon: Building2, label: "Company Profile" },
+      { href: "/dashboard/social", icon: Share2, label: "Social Media" },
       { href: "/dashboard/team", icon: UserCog, label: "Team" },
       { href: "/dashboard/billing", icon: CreditCard, label: "Billing" },
     ],
